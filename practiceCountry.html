@@ -1,0 +1,663 @@
+<!--##########
+# <概要>                                  
+# 国旗を見て答えたり、選んだりして覚える学習アプリ
+###########-->
+
+<!DOCTYPE html>
+  <head>
+    <script type="text/javascript">
+      let mode=0; // 出題範囲用 0:全範囲,1:苦手範囲
+      let numberOfDisplay=5; // 一覧で表示する件数
+      let selectArrayEn=[]; // 出題範囲の国旗の英語 img用
+      let selectArrayJp=[]; // 出題範囲の国旗の日本語 
+      // 国旗の英語 img用
+      countryNameEn=["America","Ireland","Italy","India",
+                    "Ukraine","Australia","Austria","Canada",
+                    "Cambodia","Kyrgyzstan","Greece","CotedIvoire",
+                    "Congo","DemocraticRepublicofCongo","Georgia","Switzerland",
+                    "Germany","Japan","NewZealand","France",
+                    "Bulgaria","Belgium","Romania",];
+      // 国旗の日本語 
+      countryNameJp=["アメリカ","アイルランド","イタリア","インド",
+                    "ウクライナ","オーストラリア","オーストリア","カナダ",
+                    "カンボジア","キリギス","ギリシャ","コートジボワール",
+                    "コンゴ共和国","コンゴ民主共和国","ジョージア","スイス",
+                    "ドイツ","日本","ニュージーランド","フランス",
+                    "ブルガリア","ベルギー","ルーマニア"];
+      
+      /* Cookieの初期化 */
+      function initCookie(){
+        const extime=getExtimeForCookie(); // GMTを取得
+        for(let i=0;i<countryNameEn.length;i++){ // 国旗の数だけ
+          document.cookie = `${countryNameJp[i]}=`+escape(0)+";expires="+extime; // 誤答回数を0にする
+        }
+      }
+
+      /* gameが始まる時に呼び出す。 */
+      function initGame(){
+        /* 出題範囲の国を配列に入れる。 */
+        if(mode==0){ // 全範囲
+          selectArrayEn=countryNameEn; // 国を格納(画像のファイル名用)
+          selectArrayJp=countryNameJp; // 国を格納(回答用)
+        }else if(mode==1){ // 苦手分野(Cookieを用いる)
+          selectArrayEn=[];
+          selectArrayJp=[];
+          let countWeakPoint=0;
+          let countryCookie=document.cookie; // Cookieの取得
+          countryCookie=document.cookie.split(/;\s*/).map(x =>x.split('=') ); // Cookieの情報を";"で分けて、その後、"="で分ける
+          
+          let averageScore=getWeakPointAverage(countryCookie); // 各国の誤答回数の平均を求める
+          for(let i=1;i<countryCookie.length;i++){
+            if(parseInt(countryCookie[i][1])>averageScore){
+              countWeakPoint++; 
+              selectArrayEn.push(countryNameEn[i]); // 国を格納(画像のファイル名用)
+              selectArrayJp.push(countryNameJp[i]); // 国を格納(回答用)
+            }
+          }
+          if(countWeakPoint==0){ // 苦手な国がない場合
+            window.alert("苦手な国がないので、出題範囲を全体にします。");
+            mode=0; // modeの切り替え
+          }
+        }
+      }
+
+      /* Cookieから誤答回数の平均を求める */
+      function getWeakPointAverage(countryCookie){
+        let averageScore=0;
+        for(let i=0;i<countryCookie.length;i++){
+          averageScore+=parseInt(countryCookie[i][1]); // 誤答回数の合計
+        }
+        averageScore/=countryCookie.length; // 誤答回数平均を求める
+        return averageScore;
+      }
+     
+      /* 画面に出ている文字のデータの削除 */
+      /*#############
+      # clearData()が必要な理由
+      # document.writeを別関数内で使用すると、前のdocument.writeの内容が消えてしまう。
+      # また、繰り返し呼ばれる関数内では、一度document.writeで書いたものを消さないと、2,3重になってしまうので、毎回内容を消すような仕組みにした(※1)。
+      # そのため、現在のdoucument内の情報を取得して、それをremove()で消し、2,3重にならないようにしている。
+      # getInfoIdGame*によって各Modeで、TagNameやIdを用いてそれぞれのMode内の情報を取得する。
+      # (※1)この状態の例を示す。
+      # a()関数とb()関数がある際に、a(),b()はそれぞれ、doucument.write("a"),document.write("b")を出力するとする。
+      # この時、a() -> b() -> a()の順番で関数呼び出しが行われると、aが表示 -> aの表示が消え、bが表示 -> bの表示が消え、最初のaの表示と今呼ばれたaの表示となり、
+      # aが2つ出力される結果になるような状態である。
+      #############*/
+
+      function clearData(){ 
+        let pastInfo=[];
+        getInfoIdMenu(pastInfo); 
+        removeIdMenu(pastInfo); // Menuの表示の削除
+
+        getInfoIdGame1(pastInfo); 
+        removeIdGame1(pastInfo); // Game1の表示の削除
+        pastInfo=[];
+        getInfoIdGame2(pastInfo); 
+        removeIdGame2(pastInfo); // Game2の表示の削除
+        pastInfo=[];
+        getInfoIdGame3_4(pastInfo); 
+        removeIdGame3_4(pastInfo); // Game3_4の表示の削除
+        pastInfo=[];
+        getInfoIdSetting(pastInfo); 
+        removeIdSetting(pastInfo); // settingの表示の削除
+      }
+
+      /* メニューで表示されている情報を読み取る */
+      function getInfoIdMenu(pastInfo){
+        pastInfo[0]=document.getElementById("title");
+        pastInfo[1]=document.getElementsByTagName("nav");
+      }
+
+      /* メニューで表示されている情報の削除 */
+      function removeIdMenu(pastInfo){
+        for(let i=0;i<pastInfo.length ;i++){
+          if(i==1){ // タグに対して削除を行う
+            for(let j=0;j<pastInfo[i].length ;j++){ // idと違い、タグは複数あるのでfor文で回す
+              if(pastInfo[i][j]){
+                pastInfo[i][j].remove(); 
+              }
+            }
+          }else if(pastInfo[i]){
+            pastInfo[i].remove(); // Idに対して削除を行う
+          }
+        }
+      }
+
+      /* メニューの表示 */
+      function displayMenu(){
+        clearData(); // 画面の情報を消す
+        document.write("<h1 id='title'>WELCOME TO LEARNING COUNTRY PAGE </h1>"); // タイトルの表示
+        document.write("<nav>"); // メニューバーの表示
+          document.write("<ul style='display:flex;justify-content: center;background-color: aqua;padding: 4px;'>"); 
+            document.write("<li style='list-style: none;background-color: white;padding: 4px;margin:2px;text-decoration:underline;' onclick='clickMode(0)'>国旗を見て答える</li>") // Game1
+            document.write("<li style='list-style: none;background-color: white;padding: 4px;margin:2px;text-decoration:underline;' onclick='clickMode(1)'>国名から国旗を選ぶ</li>") // Game2
+            document.write("<li style='list-style: none;background-color: white;padding: 4px;margin:2px;text-decoration:underline;' onclick='clickMode(2)'>国旗一覧</li>") // Game3
+            document.write("<li style='list-style: none;background-color: white;padding: 4px;margin:2px;text-decoration:underline;' onclick='clickMode(3)'>苦手な国旗一覧</li>") // Game4
+            document.write("<li style='list-style: none;background-color: white;padding: 4px;margin:2px;text-decoration:underline;' onclick='clickMode(4)'>設定</li>") // Setting
+          document.write("</ul>"); 
+        document.write("</nav>"); 
+        document.body.style='text-align:center;'; // bodyを先頭にする。(document.writeでbodyの内容も上書きされるので、ここで追加させる)
+      }
+
+
+      /* 誤答数を更新する */
+      function changeCookie(countryName,score){ 
+        const extime=getExtimeForCookie(); // GMTを取得
+
+        let countryCookie=document.cookie.split(/;\s*/).map(x =>x.split('=') ); // Cookieの情報を";"で分けて、その後、"="で分ける
+        let i=0;
+        while(i<countryCookie.length&&countryCookie[i][0]!=countryName){ // 変えるCookieの属性を探す
+          i++;
+        }
+        if(i<countryCookie.length){ 
+          document.cookie = `${countryCookie[i][0]}=`+escape(parseInt(countryCookie[i][1])+score)+";expires="+extime; // 探した属性の値を変える
+        }
+        /*######### 
+        # 以下の処理について
+        # 属性の値を変えると、その値が一番後ろになりCookieの属性の順番が変わってしまうので、
+        # 変更した属性以降の属性を再入力することで、順番を保つ。
+        #########*/
+        for(i=i+1;i<countryCookie.length;i++){
+          document.cookie = `${countryCookie[i][0]}=`+escape(countryCookie[i][1])+";expires="+extime; 
+          
+        }
+       
+      }
+      
+      /* Cookieの保存期間の指定 */
+      function getExtimeForCookie(){
+        const presentDay= new Date(); // 現在時刻の取得
+        presentDay.setDate(presentDay.getDate()+7); // Cookieの有効期限を1週間とする
+        const extime=presentDay.toGMTString(); // GMTを取得
+        return extime;
+      }
+      
+      /* -------------------------------------------------------------------------- */
+
+
+      /* Game1の始まり */
+      function startGame1(){
+        initGame(); // 初期化
+        newCountryGame1(); // 表示する国を呼び出す
+      }
+
+      /* Game1で表示されている情報を読み取る */
+      function getInfoIdGame1(pastInfo){
+        pastInfo[0]=document.getElementById("country_flag");
+        pastInfo[1]=document.getElementById("answer");
+        pastInfo[2]=document.getElementById("pass");
+        pastInfo[3]=document.getElementById("input_field");
+        pastInfo[4]=document.getElementById("commentary");
+        pastInfo[5]=document.getElementById("next");
+        pastInfo[6]=document.getElementsByTagName("div");
+      }
+
+      /* Game1で表示されている情報の削除 */
+      function removeIdGame1(pastInfo){
+        for(let i=0;i<pastInfo.length ;i++){
+          if(i==6){ // タグに対して削除を行う
+            for(let j=0;j<pastInfo[6].length ;j++){ // idと違い、タグは複数あるのでfor文で回す
+              if(pastInfo[6][j]){
+                pastInfo[6][j].remove(); 
+              }
+            }
+          }else if(pastInfo[i]){
+            pastInfo[i].remove(); // Idに対して削除を行う
+          }
+        }
+      }
+
+      /* 新しい国を表示する */
+      function newCountryGame1(){
+        displayMenu(); // 表示している文字の情報の削除&メニューの表示
+        rand=Math.floor(Math.random()*selectArrayJp.length); // 表示する画像の乱数生成
+        document.write("<p>この国旗の国はどこでしょう</p>");
+        document.write(`<div><img src='country-flag/${selectArrayEn[rand]}.png' width='100px' name='${selectArrayJp[rand]}' id='country_flag' style='border: 1px solid black;'></div>`);
+        document.write("<input type='text' size='20' id='input_field'>");
+        document.write(`<input type='button' value='回答' id='answer' onclick='checkAnswerGame1("answer")'>`);
+        document.write(`<input type='button' value='パス' id='pass' onclick='checkAnswerGame1("pass")'>`);
+        document.getElementById("input_field").focus(); // textfiledにフォーカスを当てる
+      }
+
+      /* 回答が押された後にあっているかを確認 */
+      function checkAnswerGame1(status){ // statusには答えたのか、パスしたのかが入る
+        let pastInfo=[];
+        getInfoIdGame1(pastInfo); // 表示している文字の情報の取得
+        removeIdGame1(pastInfo); // 表示している文字の情報の削除
+        answer=pastInfo[3].value; // 回答を取得する
+
+        // 画像を再表示する
+        document.write(`<div><img src='${pastInfo[0].src}' width='${pastInfo[0].width}' name='${pastInfo[0].name}' id='${pastInfo[0].id}' style='${pastInfo[0].style}'></div>`);
+
+        /* 入力が一致するか確認する */
+        if(status=="answer"&&document.getElementById("country_flag").name==answer){
+          document.write("<p id='commentary' style='color:red;font-weight:bold;'>正解!</p>");
+        }else{
+          document.write(`<p id='commentary'>答えは<span style='color:blue;font-weight:bold;'>${document.getElementById("country_flag").name}</span>です。</p>`);
+          changeCookie(pastInfo[0].getAttribute("name"),2); // Cookieの内容を変える
+        }
+        document.write("<input type='button' value='次へ' id='next' onclick='newCountryGame1()'>");
+        document.getElementById("next").focus(); // "次へ"ボタンにフォーカスを当てる
+      }
+
+      /* -------------------------------------------------------------------------- */
+
+      /* Game2の始まり */
+      function startGame2(){
+        initGame(); // 初期化
+        newCountryGame2(); // 表示する国を呼び出す
+      }
+
+      /* 表示されている文字の情報を読み取る */
+      function getInfoIdGame2(pastInfo){
+        pastInfo[0]=document.getElementById("country_flag");
+        pastInfo[1]=document.getElementById("country_flag1");
+        pastInfo[2]=document.getElementById("country_flag2");
+        pastInfo[3]=document.getElementById("country_flag3");
+        pastInfo[4]=document.getElementById("country_flag4");
+        pastInfo[5]=document.getElementById("commentary");
+        pastInfo[6]=document.getElementById("next");
+        pastInfo[7]=document.getElementsByTagName("p");
+        pastInfo[8]=document.getElementsByTagName("div");
+      }
+
+      /* 表示されている文字を削除する */
+      function removeIdGame2(pastInfo){
+        for(let i=0;i<pastInfo.length ;i++){
+          if(i>=7){ // タグに対して
+            for(let j=0;j<pastInfo[i].length ;j++){
+              pastInfo[i][j].remove();
+            }
+          }else if((pastInfo[i])){ // Idに対して
+            pastInfo[i].remove();
+          }
+          
+        }
+      }
+
+      /* 新しい画像を表示する */
+      function newCountryGame2(){ 
+        displayMenu(); // メニューの表示
+
+        let rand=Math.floor(Math.random()*selectArrayJp.length); // 出題する国の乱数生成
+        document.write(`<p><span id='country_flag' name='${selectArrayJp[rand]}' style='color:green;background-color:yellow;'>${selectArrayJp[rand]}</span>の国旗を選択してください。</p>`)
+
+        /*#################
+        # <乱数処理について> #
+        # まず、その画像をすでに選択したか(乱数で割り当てたか)を管理するために、randFladArrayの旗配列を作成する
+        # 次に乱数を生成する。初めに生成した乱数は問題の国名である。問題の国名は必ず解答欄にあるため、randFlagArrayの対応する番号に旗を立てる
+        # ↓以下ループ。
+        # 乱数を生成し、randFlagArrayを確認し、その乱数の旗が下がっているかを確認し、下がっているのであれば、旗を上げる。
+        # 上がっているのであれば、乱数+1をして、その旗が上がっているかを調べる。これを旗を上げられるまで繰り返す。
+        # これを表示する国旗の数が出揃うまでループをする。
+        #################*/
+
+        randFlagCount=0; // 表示する画像の数
+        randFlagArray=[]; // 表示する画像の旗を立てる配列
+        for(let i=0;i<selectArrayJp.length;i++){
+          randFlagArray[i]=0;
+        }
+        
+        /* 表示する国旗の数だけ旗をランダムで立てる */
+        randFlagCount+=1;
+        randFlagArray[rand]=1; // 出題する問題の国旗の画像の旗を立てる
+        while(randFlagCount<4&&randFlagCount<selectArrayJp.length){ // 画像を表示する数が4か最大表示可能数(Arrayに入っていない可能性あり)を表示する
+          rand=Math.floor(Math.random()*selectArrayJp.length);
+          while(randFlagArray[rand]){ // rand番目の画像が未取得になるまで
+            rand+=1; // randをずらす
+            if(rand==selectArrayJp.length){ // randの値が画像の数を超したら先頭にする
+              rand=0;
+            }
+          }
+          randFlagCount+=1;
+          randFlagArray[rand]=1; // 旗を立てる
+        }
+
+        /* 表示する */
+        document.write("<div style='display:flex;justify-content: center;'>"); // 横並び
+        rand=Math.floor(Math.random()*selectArrayJp.length); // 最初(一番左)に表示する画像を決める
+        while(randFlagCount!=0){ // 表示する個数が0になるまで
+          if(randFlagArray[rand]==1){ // 旗が立っているなら
+            document.write(`<img src='country-flag/${selectArrayEn[rand]}.png' width='100px' name='${selectArrayJp[rand]}' id='country_flag${randFlagCount}' style='border: 1px solid black;margin:10px;' onclick='checkAnswerGame2(country_flag${randFlagCount})'>`);
+            randFlagCount-=1; // 表示する残りの個数を減らす
+            randFlagArray[rand]=0; // 旗を下ろす
+          }
+          rand+=1; // 次の配列の場所を見る
+          if(rand==selectArrayJp.length){ // 端まで行ったら先頭に戻す
+            rand=0;
+          }
+        }
+        document.write("</div>");
+      }
+
+      /* 押された国旗があっているかどうか */
+      function checkAnswerGame2(countryId){ // クリックされた国旗のId
+        let pastInfo=[];
+        getInfoIdGame2(pastInfo); // 表示されている情報の入手
+        removeIdGame2(pastInfo); // 表示されている情報の削除
+        document.write(`<p><span id='country_flag' name='${pastInfo[0].name}' style='color:green;background-color:yellow;'>${pastInfo[0].getAttribute('name')}</span>の国旗を選択してください。</p>`) // 国名の部分の背景を黄色にして見やすくする
+        document.write("<div style='display:flex;justify-content: center;'>");
+        let i;
+        // 表示している画像の枚数によって変える
+        if(selectArrayJp.length>=4){ // 出題範囲が4個以上ある
+          i=4;
+        }else{
+          i=selectArrayJp.length;
+        }
+        for(i;i>0;i--){
+          document.write(`<img src='${pastInfo[i].src}' width='100px' name='${pastInfo[i].name}' id='${pastInfo[i].id}' style='border: 1px solid black;margin:10px;'>`);
+        }
+        document.write("</div>");
+
+
+        let clickedName=countryId.name; // クリックされた国名(日本語)
+        // 表示している画像の枚数によって変える
+        if(selectArrayJp.length>=4){ // 出題範囲が4個以上ある
+          i=4;
+        }else{
+          i=selectArrayJp.length;
+        }
+        for(i;i>0;i--){
+            if(pastInfo[i].getAttribute('name')==pastInfo[0].getAttribute('name')){ // どの画像が正解の画像か
+              document.getElementById(`country_flag${i}`).style.border=" solid 5px red"; // 正解の画像を目立たせる
+              break;
+            }
+          }
+          document.write("<div id='commentary' >");
+        if(pastInfo[0].getAttribute('name')==clickedName){ // 押された画像と正解が一緒なら
+          document.write("<p style='color:red;font-weight:bold;'>正解!</p>");
+        }else{
+          changeCookie(pastInfo[0].getAttribute("name"),1); // Cookieの更新
+          document.write(`<p><span style='color:blue;'>残念！</span>あなたが押したのは<span style='color:blue;'>${clickedName}</span>です。</p>`);
+          document.write(`<p>${pastInfo[0].getAttribute('name')}は`);
+          switch(selectArrayJp.length){ // 表示している国旗数によって文章を変える
+            case 2: // 国旗の数が2の時
+              if(i==2){
+                document.write("<span style='color:red;font-weight:bold;'>一番左</span>です。");
+              }else if(i==1){
+                document.write("<span style='color:red;font-weight:bold;'>一番右</span>です。");
+              }
+              break;
+            case 3: // 国旗の数が3の時
+              if(i==3){
+                document.write("<span style='color:red;font-weight:bold;'>一番左</span>です。");
+              }else if(i==2){
+                document.write("<span style='color:red;font-weight:bold;'>真ん中</span>です。");
+              }else if(i==1){
+                document.write("<span style='color:red;font-weight:bold;'>一番右</span>です。");
+              }
+              break;
+            default: // 国旗の数が4の時
+              if(i==4){
+                document.write("<span style='color:red;font-weight:bold;'>一番左</span>です。");
+              }else if(i==3){
+                document.write("<span style='color:red;font-weight:bold;'>左から2番目</span>です。");
+              }else if(i==2){
+                document.write("<span style='color:red;font-weight:bold;'>右から2番目</span>です。");
+              }else if(i==1){
+                document.write("<span style='color:red;font-weight:bold;'>一番右</span>です。");
+              }
+          }
+          
+          document.write("</p>");
+        }
+        document.write("</div>");
+        document.write("<input type='button' value='次へ' id='next' onclick='newCountryGame2()'>");
+
+
+      }
+
+      /* --------------------------------------------------- */
+      let pageNum=0; // 何ページ目か
+
+      /* 一覧を表示する */
+      function startGame3_4(gameNum){
+        let nowMode=mode; // 今のmodeを取得(initGame()ようにmodeの値を変えるために、今のmodeの値を保存しておく)
+        if(gameNum==3){ // modeの管理(全範囲,苦手範囲)
+          mode=0;
+        }else if(gameNum==4){
+          if(isHavingWeakPoint()==1){ // 苦手範囲があるかを確認
+            mode=1;
+          }else{
+            mode=0;
+            window.alert("苦手な国がありません。全範囲を呼び出します。");
+            startGame3_4(3); // 苦手範囲がないので、全範囲を呼び出す。
+          }
+        }
+        initGame(); // modeによって、selectCountryに入る国が変わるため、modeを前で変更する
+        mode=nowMode; // modeを戻す
+        pageNum=1; // 1ページ目
+        displayInitGame3_4();
+      }
+
+      /* 表示されている情報の取得 */
+      function getInfoIdGame3_4(pastInfo){
+        pastInfo[0]=document.getElementById("back");
+        pastInfo[1]=document.getElementById("next");
+        pastInfo[2]=document.getElementsByTagName("table");
+        pastInfo[3]=document.getElementsByTagName("form");
+      }
+
+      /* 表示されている情報の削除 */
+      function removeIdGame3_4(pastInfo){
+        for(let i=0;i<pastInfo.length ;i++){
+          if(i>=2){ // タグ用
+            for(let j=0;j<pastInfo[i].length ;j++){
+              pastInfo[i][j].remove();
+            }
+          }else if(pastInfo[i]){ // id用
+            pastInfo[i].remove();
+          }
+        }
+      }
+
+      /* 表示件数を変えて再表示 */
+      function changeNumberDisplay(){
+        let selected= document.formNumOfDis.selectNumOfDis.selectedIndex; // 表示件数の取得
+        numberOfDisplay=document.formNumOfDis.selectNumOfDis.options[selected].value; //表示件数を変える
+        pageNum=1; // 先頭ページに戻す
+        displayInitGame3_4(); // 再描画
+      }
+
+
+      /* 一覧の型を表示 */
+      function displayInitGame3_4(){
+        pastInfo=[];
+        getInfoIdGame3_4(pastInfo); // Game3_4の表示のデータ取得
+        removeIdGame3_4(pastInfo); // Game3_4の表示の削除
+        displayMenu(); // 情報の削除&メニューバーの表示
+        /* 表示件数の表示 */
+        document.write("<form name='formNumOfDis'>"); // formの作成
+          document.write("表示件数");
+          document.write("<select name='selectNumOfDis'>");
+          document.write("<option value='5'>5件");
+          document.write("<option value='10'>10件");
+          document.write("<option value='15'>15件");
+          document.write("<option value='20'>20件");
+          document.write("<option value='50'>50件");
+          document.write("<input type='button' value='切り替え' onclick='changeNumberDisplay()'>"); // 「切り替え」ボタンへの発火
+        document.write("</form>");
+        
+        /* 今の表示件数を探す */
+        for(let i=0;i<5;i++){
+          if(document.formNumOfDis.selectNumOfDis[i].value==numberOfDisplay){
+            document.formNumOfDis.selectNumOfDis[i].selected=true; // セレクトリストの初期値を変更
+            break;
+          }
+        }
+
+        /* tableタグで型だけ作る */
+        document.write("<table align='center'>");
+          document.write("<thead>"); // Table Header
+            document.write("<tr>");
+              document.write("<th>国名</th>");  
+              document.write("<th>国旗</th>");  
+              document.write("<th>URL(Wiki)</th>");
+            document.write("</tr>");
+          document.write("</thead>");
+          document.write("<tbody>"); // Table Body
+            for(let i=0;i<numberOfDisplay&&(pageNum-1)*numberOfDisplay+i<selectArrayJp.length;i++){ // 表示件数か表示可能件数の数だけ表示
+              document.write("<tr>");
+              document.write(`<td id='name${i}' style='text-align:center;'></td>`);
+              document.write(`<td id='flag${i}'></td>`);
+              document.write(`<td id='url${i}' style='text-align:center;'></td>`);
+              document.write("</tr>");
+            }
+          document.write("</tbody>");
+        document.write("</table>");
+        /* 「前へ」、「次へ」のボタン */
+        document.write(`<input type='button' value='前へ' id='back' onclick='changePageNumGame3_4(back)'>`);
+        document.write(`<input type='button' value='次へ' id='next' onclick='changePageNumGame3_4(next)'>`);
+        displayCountryGame3_4();
+      }
+
+      /* ページの切り替え */
+      function changePageNumGame3_4(clickedId){
+        if(clickedId.id=="next"){
+          pageNum++;
+        }else{
+          pageNum--;
+        }
+        displayInitGame3_4(); // 表示する画像を変える
+      }
+
+      /* Wikiを開く */
+      function openURLGame3_4(countryName){
+        window.open (`https://ja.wikipedia.org/wiki/${countryName}`,"ウィンドウの名前");
+      }
+
+      /* 情報を表示する */
+      function displayCountryGame3_4(){
+        for(let i=0;i<numberOfDisplay&&(pageNum-1)*numberOfDisplay+i<selectArrayJp.length ;i++){
+          document.getElementById(`name${i}`).innerText=`${selectArrayJp[(pageNum-1)*numberOfDisplay+i]}`; // 名前
+          document.getElementById(`flag${i}`).innerHTML=`<img src='country-flag/${selectArrayEn[(pageNum-1)*numberOfDisplay+i]}.png' width=100px>`; // 画像
+          document.getElementById(`url${i}`).innerHTML=`<input type='button' value='Wiki' onclick='openURLGame3_4("${selectArrayJp[(pageNum-1)*numberOfDisplay+i]}")'>`; // URL用のボタン
+        }
+
+        /* ページの番号によってボタンの表示する文字を変える,押した時に反応させなくさせる */
+        if(pageNum!=1){ // 先頭ページでない
+          document.getElementById('back').value="前へ"
+          document.getElementById('back').setAttribute('onclick', 'changePageNumGame3_4(back)');
+        }else{ // 先頭ページ
+          document.getElementById('back').value="先頭"
+          document.getElementById('back').setAttribute('onclick', '');
+          
+        }
+        /* 国旗がない場合には、Math.floor((selectArrayJp.length-1)/4)が-1になるため、+1をして0にし、pageNum(1)<0で成り立たない */
+        if(pageNum<Math.floor((selectArrayJp.length-1)/numberOfDisplay)+1){ // 最後のページでない 
+          document.getElementById('next').value="次へ"
+          document.getElementById('next').setAttribute('onclick', 'changePageNumGame3_4(next)');
+        }else{ // 最後のページ
+          document.getElementById('next').value="最後尾"
+          document.getElementById('next').setAttribute('onclick', '');
+
+        }
+
+      }
+
+      /* ---------------------- */
+      /* 設定の表示 */
+      function setting(){
+        displayMenu();
+        document.write("<form name='setting'>");
+          document.write("<input type = 'radio' name = 'questionRange'>全範囲から出題"); // 出題範囲の指定
+          document.write("<input type = 'radio' name = 'questionRange'>苦手範囲から出題");
+          document.write("<input type = 'button' value = '設定の変更' onclick='changeMode()'><br>");
+          document.write("<input type = 'button' value = '苦手範囲のリセット' onclick='comfirmResetCookie()'><br>"); // クッキーのリセット
+        document.write("</form>");
+        if(mode==0){ // 出題範囲のラジオボタンの最初にどちらのボタンが押されている状態にするか
+          document.setting.elements[0].checked=true;
+        }else{
+          document.setting.elements[1].checked=true;
+        }
+      }
+
+      /* 表示されている情報の取得 */
+      function getInfoIdSetting(pastInfo){
+        pastInfo[0]=document.getElementsByTagName("form");
+      }
+
+      /* 表示されている情報を削除 */
+      function removeIdSetting(pastInfo){
+        for(let i=0;i<pastInfo.length ;i++){
+          if(i==0){
+            for(let j=0;j<pastInfo[i].length ;j++){ // タグ用
+              pastInfo[i][j].remove();
+            }
+          }else if(pastInfo[i]){ // id用
+            pastInfo[i].remove();
+          }
+        }
+      }
+
+      /* リセットして良いかの確認 */
+      function comfirmResetCookie(){
+        input=window.prompt("リセットしてよければ「Yes」と入力してください。"); // 確認要求
+        if(input=="Yes"){
+          initCookie(); // 初期化
+          mode=0; // 苦手な国がリセットされたので、modeを0に戻す
+          window.alert("苦手範囲の情報をリセットしました。");
+        }else{
+          window.alert("苦手範囲の情報のリセットをキャンセルしました。");
+        }
+      }
+      
+      /* 苦手範囲が存在するかどうか */
+      function isHavingWeakPoint(){
+        let countryCookie=document.cookie; // Cookieの取得
+        countryCookie=document.cookie.split(/;\s*/).map(x =>x.split('=') ); // Cookieの情報を";"で分けて、その後、"="で分ける
+        let averageScore=getWeakPointAverage(countryCookie); // 各国の誤答回数の平均を求める;
+        for(let i=0;i<countryCookie.length;i++){ 
+          if(parseInt(countryCookie[i][1])>averageScore){ // 平均の誤答回数よりも多く間違えている場合
+            return 1; // 苦手範囲が存在していることを返す
+          }
+        }
+        return 0; // 苦手範囲が存在していない
+      } 
+
+      /* 出題範囲を変える */
+      function changeMode(){
+        if (document.setting.elements[0].checked) { // 全範囲の場合
+          mode=0;
+        }else if(isHavingWeakPoint()==1){ // 全範囲ではなく(苦手範囲)、苦手範囲がある時
+            mode=1;
+        }else{ // 全範囲ではなく(苦手範囲)、苦手範囲がない時
+          mode=0;
+          window.alert("苦手な国がありません。");
+        }
+      }
+
+      /* ---------------------- */
+
+      /* ゲームの種類を変える */
+      function clickMode(selected){
+        switch(selected){
+          case 0: // 画像を見て答える
+            startGame1();
+          break;
+          case 1: // 画像を選ぶ
+            startGame2();
+          break;
+          case 2: // 国旗一覧
+            startGame3_4(3);
+          break;
+          case 3: // 苦手な国旗一覧
+            startGame3_4(4);
+          break;
+          case 4: // 設定
+            setting();
+          break;
+        }
+      }
+    </script>
+  </head>
+  <body style='text-align:center;'>
+    <script type="text/javascript">
+      displayMenu(); // メニューの表示
+      let countryCookie=document.cookie; // Cookieの取得
+      if(countryCookie==""){ // 初めての場合
+        initCookie(); // Cookieの初期化
+      }
+      </script>
+  </body>
+</html>
